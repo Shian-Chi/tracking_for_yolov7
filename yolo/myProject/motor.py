@@ -109,9 +109,9 @@ class motorCtrl():
                 n += 1
             except Exception as e:
                 print("ERROR:", e)
-                return self.info.angle
+                return self.info.encoder,self.info.angle
 
-            return self.info.angle
+            return self.info.encoder,self.info.angle
 
 
 def calc_value_Checksum(value):

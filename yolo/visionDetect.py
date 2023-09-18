@@ -68,18 +68,19 @@ def motorPID_Ctrl(frameCenter_X, frameCenter_Y):
     print(f"{pidErr[0]:.3f}", f"{pidErr[1]:.3f}")
 
     if pidErr[0] == pidErr[1] == 0:
-        e1 = motor1.getEncoderAndAngle()
-        e2 = motor2.getEncoderAndAngle()
-        print(e1, e2)
-        return e1, e2
+        _, angle1 = motor1.getEncoderAndAngle()
+        _, angle2 = motor2.getEncoderAndAngle()
+        print(angle1, angle2)
+        return angle1, angle2
+    return 0, 0
 
 
 def PID(xyxy):
-    e = None
+    angle1, angle2 = 0, 0
     if xyxy is not None:
         # Calculate the center point of the image frame
-        e = motorPID_Ctrl(((xyxy[0] + xyxy[2]) / 2).item(), ((xyxy[1] + xyxy[3]) / 2).item())
-    return e
+        angle1, angle2 = motorPID_Ctrl(((xyxy[0] + xyxy[2]) / 2).item(), ((xyxy[1] + xyxy[3]) / 2).item())
+    return angle1, angle2
 
 
 class YOLO():
@@ -147,6 +148,7 @@ class YOLO():
             max_conf = -1  # Variable to store the maximum confidence value
             max_xyxy = None  # Variable to store the xyxy with the maximum confidence
             n = 0
+            detectFlag = False
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(
@@ -164,15 +166,17 @@ class YOLO():
                         plot_one_box(xyxy, im0, self.colors[int(cls)], label, line_thickness=1)
 
                     if conf > max_conf:
+                        detectFlag = True
                         max_conf = conf
                         max_xyxy = xyxy
             # Print time (inference + NMS)
             inferenceTime = 1E3*(self.t2-self.t1)
             NMS_Time = 1E3*(self.t3-self.t2)
             self.spendTime = inferenceTime + NMS_Time + s_t
-            print(f'{s}Done. ({inferenceTime:.1f}ms) Inference, ({NMS_Time:.1f}ms) NMS, FPS:{self.spendTime:.1f}\n')
+            fps = 1E3/self.spendTime
+            print(f'{s}Done. ({inferenceTime:.1f}ms) Inference, ({NMS_Time:.1f}ms) NMS, FPS:{fps:.1f}\n')
 
-        return self.spendTime, n, im0, max_conf, max_xyxy
+        return fps, detectFlag, max_xyxy
 
     def loadimg(self):
         imgs = [None] * 1
@@ -221,8 +225,8 @@ class YOLO():
             if not self.loadimg():
                 print("No image")
                 raise StopIteration
-            t, num, im0, _, xyxy = self.runYOLO()
-            PID(xyxy)
+            fps, flag, xyxy = self.runYOLO()
+            angle1, angle2 = PID(xyxy)
 
             # Save image
 #            self.save(im0)
@@ -233,7 +237,7 @@ class YOLO():
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     raise StopIteration
                 
-            return t
+            return fps, flag, angle1, angle2
         except Exception as e:
             self.cap.release()
             if self.frameOut is not None:
